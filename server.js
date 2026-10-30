@@ -1,11 +1,11 @@
 
 const express = require("express");
+const path = require("path");
 
 const app = express();
 
 app.use(express.json());
 
-// Allow your website to connect to this API
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -18,13 +18,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Show website homepage
 app.get("/", (req, res) => {
-  res.json({
-    status: "success",
-    message: "Video API is running"
-  });
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
+// API endpoint
 app.post("/api/video", (req, res) => {
   const { url } = req.body;
 
