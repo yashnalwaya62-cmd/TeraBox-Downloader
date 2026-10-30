@@ -1,0 +1,280 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TeraBox Downloader</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  color: white;
+  background: linear-gradient(110deg, #091b37, #173f79);
+}
+
+.container {
+  width: 100%;
+  max-width: 650px;
+  padding: 27px 28px 35px;
+  text-align: center;
+  background: rgba(255,255,255,0.09);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 19px;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+}
+
+h1 {
+  margin: 0 0 18px;
+  font-size: 32px;
+  color: #55b9ff;
+}
+
+.subtitle {
+  font-size: 16px;
+  margin-bottom: 28px;
+}
+
+input {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #b8d2f5;
+  border-radius: 10px;
+  font-size: 15px;
+  outline: none;
+  background: #f8fbff;
+  margin-bottom: 22px;
+}
+
+button {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 10px;
+  background: #1685f9;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0872df;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.note {
+  margin-top: 21px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+#status {
+  margin-top: 20px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+#result {
+  display: none;
+  margin-top: 25px;
+}
+
+video {
+  width: 100%;
+  max-height: 360px;
+  background: black;
+  border-radius: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.actions button {
+  flex: 1;
+}
+
+.download {
+  background: #16a34a;
+}
+
+.download:hover {
+  background: #12823c;
+}
+
+@media(max-width: 500px) {
+  .container {
+    padding: 25px 18px;
+  }
+
+  h1 {
+    font-size: 27px;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>TeraBox Downloader</h1>
+
+  <p class="subtitle">
+    Paste your TeraBox shared video link to try to load the video.
+  </p>
+
+  <input
+    type="url"
+    id="videoLink"
+    placeholder="Paste TeraBox share link here"
+  >
+
+  <button id="convertBtn" onclick="convertVideo()">
+    Convert Video Link
+  </button>
+
+  <div id="status"></div>
+
+  <div id="result">
+    <video id="videoPlayer" controls playsinline></video>
+
+    <div class="actions">
+      <button onclick="playVideo()">▶ Play</button>
+      <button class="download" onclick="downloadVideo()">
+        ↓ Download
+      </button>
+    </div>
+  </div>
+
+  <p class="note">
+    Use only videos you own or have permission to access.
+    Video playback depends on the API and source host.
+  </p>
+
+</div>
+
+<script>
+const API_URL =
+  "https://terabox-downloader-1b8z.onrender.com/api/video";
+
+let currentVideoUrl = "";
+
+async function convertVideo() {
+
+  const link = document.getElementById("videoLink").value.trim();
+  const status = document.getElementById("status");
+  const button = document.getElementById("convertBtn");
+  const result = document.getElementById("result");
+  const player = document.getElementById("videoPlayer");
+
+  result.style.display = "none";
+  status.textContent = "";
+  currentVideoUrl = "";
+
+  if (!link) {
+    status.textContent = "Please paste a video link first.";
+    return;
+  }
+
+  try {
+    const parsed = new URL(link);
+
+    if (parsed.protocol !== "https:") {
+      throw new Error("Please enter a valid HTTPS link.");
+    }
+  } catch {
+    status.textContent = "Please enter a valid link.";
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Processing...";
+  status.textContent = "Please wait, processing your link...";
+
+  try {
+
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ url: link })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "API request failed");
+    }
+
+    currentVideoUrl = data.videoUrl;
+
+    // This starter API returns the submitted URL.
+    // It does not extract a TeraBox video stream.
+    const isDirectVideo =
+      /\.(mp4|webm|ogg)(\?.*)?$/i.test(
+        new URL(currentVideoUrl).pathname
+      );
+
+    if (!isDirectVideo) {
+      status.textContent =
+        "Link received! Actual TeraBox video extraction is not connected yet.";
+      return;
+    }
+
+    player.src = currentVideoUrl;
+    result.style.display = "block";
+    status.textContent = "Video link received successfully!";
+
+  } catch (error) {
+    status.textContent = error.message || "Something went wrong.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "Convert Video Link";
+  }
+}
+
+function playVideo() {
+  const player = document.getElementById("videoPlayer");
+  player.play().catch(() => {
+    document.getElementById("status").textContent =
+      "Unable to play this video.";
+  });
+}
+
+function downloadVideo() {
+  if (!currentVideoUrl) return;
+
+  const link = document.createElement("a");
+  link.href = currentVideoUrl;
+  link.download = "video";
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.click();
+}
+</script>
+
+</body>
+</html>
