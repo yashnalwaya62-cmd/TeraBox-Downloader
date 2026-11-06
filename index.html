@@ -7,9 +7,7 @@
 <title>TeraBox Downloader</title>
 
 <style>
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -40,20 +38,16 @@ h1 {
   color: #55b9ff;
 }
 
-.subtitle {
-  font-size: 16px;
-  margin-bottom: 28px;
-}
+.subtitle { margin-bottom: 28px; }
 
-input {
+input[type="url"] {
   width: 100%;
   padding: 16px;
   border: 1px solid #b8d2f5;
   border-radius: 10px;
   font-size: 15px;
-  outline: none;
   background: #f8fbff;
-  margin-bottom: 22px;
+  margin-bottom: 15px;
 }
 
 button {
@@ -68,19 +62,26 @@ button {
   cursor: pointer;
 }
 
-button:hover {
-  background: #0872df;
+button:hover { background: #0872df; }
+button:disabled { opacity: 0.6; cursor: wait; }
+
+.section-title {
+  margin: 28px 0 12px;
+  font-size: 16px;
+  color: #b9ddff;
 }
 
-button:disabled {
-  opacity: 0.6;
-  cursor: wait;
+.upload-box {
+  padding: 18px;
+  border: 1px dashed #8fcaff;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
 }
 
-.note {
-  margin-top: 21px;
-  font-size: 12px;
-  line-height: 1.6;
+input[type="file"] {
+  width: 100%;
+  color: white;
+  margin: 10px 0;
 }
 
 #status {
@@ -107,30 +108,21 @@ video {
   margin-top: 15px;
 }
 
-.actions button {
-  flex: 1;
-}
+.actions button { flex: 1; }
 
-.download {
-  background: #16a34a;
-}
+.download { background: #16a34a; }
+.download:hover { background: #12823c; }
 
-.download:hover {
-  background: #12823c;
+.note {
+  margin-top: 21px;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 @media(max-width: 500px) {
-  .container {
-    padding: 25px 18px;
-  }
-
-  h1 {
-    font-size: 27px;
-  }
-
-  .actions {
-    flex-direction: column;
-  }
+  .container { padding: 25px 18px; }
+  h1 { font-size: 27px; }
+  .actions { flex-direction: column; }
 }
 </style>
 </head>
@@ -142,18 +134,29 @@ video {
   <h1>TeraBox Downloader</h1>
 
   <p class="subtitle">
-    Paste your TeraBox shared video link to try to load the video.
+    Paste a direct video link or select your own video.
   </p>
 
   <input
     type="url"
     id="videoLink"
-    placeholder="Paste TeraBox share link here"
+    placeholder="Paste video link here"
   >
 
   <button id="convertBtn" onclick="convertVideo()">
-    Convert Video Link
+    Load Video Link
   </button>
+
+  <div class="section-title">OR</div>
+
+  <div class="upload-box">
+    <strong>Select Video From Your Device</strong>
+    <input
+      type="file"
+      id="videoFile"
+      accept="video/mp4,video/webm,video/ogg"
+    >
+  </div>
 
   <div id="status"></div>
 
@@ -170,7 +173,8 @@ video {
 
   <p class="note">
     Use only videos you own or have permission to access.
-    Video playback depends on the API and source host.
+    TeraBox share-link conversion is not connected yet.
+    Selected files play locally in your browser.
   </p>
 
 </div>
@@ -180,87 +184,119 @@ const API_URL =
   "https://terabox-downloader-1b8z.onrender.com/api/video";
 
 let currentVideoUrl = "";
+let currentFileName = "";
+let localObjectUrl = "";
 
-async function convertVideo() {
+const player = document.getElementById("videoPlayer");
+const result = document.getElementById("result");
+const statusBox = document.getElementById("status");
 
-  const link = document.getElementById("videoLink").value.trim();
-  const status = document.getElementById("status");
-  const button = document.getElementById("convertBtn");
-  const result = document.getElementById("result");
-  const player = document.getElementById("videoPlayer");
+function showVideo(url, message, fileName = "") {
+  player.src = url;
+  currentVideoUrl = url;
+  currentFileName = fileName;
+  result.style.display = "block";
+  statusBox.textContent = message;
+}
 
-  result.style.display = "none";
-  status.textContent = "";
-  currentVideoUrl = "";
+document.getElementById("videoFile")
+.addEventListener("change", function() {
+  const file = this.files[0];
 
-  if (!link) {
-    status.textContent = "Please paste a video link first.";
+  if (!file) return;
+
+  if (!file.type.startsWith("video/")) {
+    statusBox.textContent = "Please select a video file.";
     return;
   }
 
+  if (localObjectUrl) {
+    URL.revokeObjectURL(localObjectUrl);
+  }
+
+  localObjectUrl = URL.createObjectURL(file);
+
+  showVideo(
+    localObjectUrl,
+    "Your video is ready to play!",
+    file.name
+  );
+});
+
+async function convertVideo() {
+  const link = document.getElementById("videoLink")
+    .value.trim();
+
+  const button = document.getElementById("convertBtn");
+
+  if (!link) {
+    statusBox.textContent = "Please enter a video link.";
+    return;
+  }
+
+  let parsed;
+
   try {
-    const parsed = new URL(link);
+    parsed = new URL(link);
 
     if (parsed.protocol !== "https:") {
-      throw new Error("Please enter a valid HTTPS link.");
+      throw new Error();
     }
   } catch {
-    status.textContent = "Please enter a valid link.";
+    statusBox.textContent = "Please enter a valid HTTPS link.";
     return;
   }
 
   button.disabled = true;
   button.textContent = "Processing...";
-  status.textContent = "Please wait, processing your link...";
+  statusBox.textContent = "Please wait...";
 
   try {
-
     const response = await fetch(API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ url: link })
+      body: JSON.stringify({ url: parsed.href })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || "API request failed");
+      throw new Error(data.message || "Request failed");
     }
 
-    currentVideoUrl = data.videoUrl;
+    const videoUrl = new URL(data.videoUrl);
 
-    // This starter API returns the submitted URL.
-    // It does not extract a TeraBox video stream.
-    const isDirectVideo =
-      /\.(mp4|webm|ogg)(\?.*)?$/i.test(
-        new URL(currentVideoUrl).pathname
+    if (videoUrl.protocol !== "https:") {
+      throw new Error("Invalid video URL");
+    }
+
+    if (!/\.(mp4|webm|ogg)$/i.test(videoUrl.pathname)) {
+      throw new Error(
+        "This is not a direct video link. TeraBox conversion is not connected."
       );
-
-    if (!isDirectVideo) {
-      status.textContent =
-        "Link received! Actual TeraBox video extraction is not connected yet.";
-      return;
     }
 
-    player.src = currentVideoUrl;
-    result.style.display = "block";
-    status.textContent = "Video link received successfully!";
+    if (localObjectUrl) {
+      URL.revokeObjectURL(localObjectUrl);
+      localObjectUrl = "";
+    }
+
+    showVideo(videoUrl.href, "Direct video link loaded!");
 
   } catch (error) {
-    status.textContent = error.message || "Something went wrong.";
+    statusBox.textContent =
+      error.message || "Unable to load video.";
   } finally {
     button.disabled = false;
-    button.textContent = "Convert Video Link";
+    button.textContent = "Load Video Link";
   }
 }
 
 function playVideo() {
-  const player = document.getElementById("videoPlayer");
   player.play().catch(() => {
-    document.getElementById("status").textContent =
-      "Unable to play this video.";
+    statusBox.textContent = "Unable to play this video.";
   });
 }
 
@@ -269,7 +305,7 @@ function downloadVideo() {
 
   const link = document.createElement("a");
   link.href = currentVideoUrl;
-  link.download = "video";
+  link.download = currentFileName || "video";
   link.target = "_blank";
   link.rel = "noopener";
   link.click();
